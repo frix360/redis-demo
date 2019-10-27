@@ -6,6 +6,7 @@ use Faker\Factory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
+use Predis\ClientException;
 
 
 class HomeController extends Controller
@@ -110,10 +111,14 @@ class HomeController extends Controller
             $shoppingCart->products[] = $request->productId;
             $product->quantity--;
 
-            Redis::pipeline(function ($pipe) use ($request, $shoppingCart, $product, $userShoppingCartKey, $productKey) {  // Transaction implementation
-                $pipe->set($userShoppingCartKey, json_encode($shoppingCart));
-                $pipe->set($productKey, json_encode($product));
-            });
+            try {
+                Redis::pipeline(function ($pipe) use ($request, $shoppingCart, $product, $userShoppingCartKey, $productKey) {  // Transaction implementation
+                    $pipe->set($userShoppingCartKey, json_encode($shoppingCart));
+                    $pipe->set($productKey, json_encode($product));
+                });
+            } catch (ClientException $exception) {
+                echo $exception->getMessage();
+            }
         }
 
         return redirect()->route('index', ['userId' => $request->userId]);
@@ -143,10 +148,14 @@ class HomeController extends Controller
 
         $product->quantity++;
 
-        Redis::pipeline(function ($pipe) use ($request, $shoppingCart, $product, $userShoppingCartKey, $productKey) {  // Transaction implementation
-            $pipe->set($userShoppingCartKey, json_encode($shoppingCart));
-            $pipe->set($productKey, json_encode($product));
-        });
+        try {
+            Redis::pipeline(function ($pipe) use ($request, $shoppingCart, $product, $userShoppingCartKey, $productKey) {  // Transaction implementation
+                $pipe->set($userShoppingCartKey, json_encode($shoppingCart));
+                $pipe->set($productKey, json_encode($product));
+            });
+        } catch (ClientException $exception) {
+            echo $exception->getMessage();
+        }
 
 
         return redirect()->route('index', ['userId' => $request->userId]);
