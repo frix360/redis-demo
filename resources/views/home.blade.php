@@ -105,7 +105,7 @@
                             </div>
 
                             <div class="form-group">
-                                <input class="btn btn-default" type="submit">
+                                <input class="btn btn-default" value="Pridėti" type="submit">
                             </div>
 
                         </form>

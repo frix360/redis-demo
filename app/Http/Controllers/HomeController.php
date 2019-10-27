@@ -48,14 +48,14 @@ class HomeController extends Controller
             'name' => 'required'
         ]);
 
-        $productId = (string)Str::uuid();
+        $shoppingCartId = (string)Str::uuid();
 
-        $key = sprintf('user-%s:shoppingCart-%s', $request->userId, $productId);
-        $value = json_encode(['id' => $productId, 'name' => $request->name, 'products' => []]);
+        $key = sprintf('user-%s:shoppingCart-%s', $request->userId, $shoppingCartId);
+        $value = json_encode(['id' => $shoppingCartId, 'name' => $request->name, 'products' => []]);
         Redis::set($key, $value);
 
         $user = json_decode(Redis::get('user-' . $request->userId)); // Add new shopping cart key to users for reference
-        $user->shoppingCarts[] = $productId;
+        $user->shoppingCarts[] = $shoppingCartId;
 
 
         Redis::set('user-' . $request->userId, json_encode($user));
@@ -96,18 +96,23 @@ class HomeController extends Controller
             'shoppingCartId' => 'required'
         ]);
 
-        $product = json_decode(Redis::get('product-' . $request->productId));
+        $productKey = 'product-' . $request->productId;
+
+        $product = json_decode(Redis::get($productKey));
         if ($product->quantity !== 0) {
 
-            $shoppingCart = json_decode(Redis::get(sprintf('user-%s:shoppingCart-%s', $request->userId, $request->shoppingCartId)));
+            $userShoppingCartKey = sprintf('user-%s:shoppingCart-%s', $request->userId, $request->shoppingCartId);
 
+            Redis::watch($userShoppingCartKey, $productKey); // Watch these keys
+
+            $shoppingCart = json_decode(Redis::get($userShoppingCartKey));
 
             $shoppingCart->products[] = $request->productId;
             $product->quantity--;
 
-            Redis::pipeline(function ($pipe) use ($request, $shoppingCart, $product) {  // Transaction implementation
-                $pipe->set(sprintf('user-%s:shoppingCart-%s', $request->userId, $request->shoppingCartId), json_encode($shoppingCart));
-                $pipe->set('product-' . $request->productId, json_encode($product));
+            Redis::pipeline(function ($pipe) use ($request, $shoppingCart, $product, $userShoppingCartKey, $productKey) {  // Transaction implementation
+                $pipe->set($userShoppingCartKey, json_encode($shoppingCart));
+                $pipe->set($productKey, json_encode($product));
             });
         }
 
@@ -122,9 +127,15 @@ class HomeController extends Controller
             'shoppingCartId' => 'required'
         ]);
 
-        $product = json_decode(Redis::get('product-' . $request->productId));
+        $productKey = 'product-' . $request->productId;
 
-        $shoppingCart = json_decode(Redis::get(sprintf('user-%s:shoppingCart-%s', $request->userId, $request->shoppingCartId)));
+        $userShoppingCartKey = sprintf('user-%s:shoppingCart-%s', $request->userId, $request->shoppingCartId);
+
+        Redis::watch($userShoppingCartKey, $productKey); // Watch these keys
+
+        $product = json_decode(Redis::get($productKey));
+
+        $shoppingCart = json_decode(Redis::get($userShoppingCartKey));
 
         $productIndex = array_search($request->productId, $shoppingCart->products);
 
@@ -132,9 +143,9 @@ class HomeController extends Controller
 
         $product->quantity++;
 
-        Redis::pipeline(function ($pipe) use ($request, $shoppingCart, $product) {  // Transaction implementation
-            $pipe->set(sprintf('user-%s:shoppingCart-%s', $request->userId, $request->shoppingCartId), json_encode($shoppingCart));
-            $pipe->set('product-' . $request->productId, json_encode($product));
+        Redis::pipeline(function ($pipe) use ($request, $shoppingCart, $product, $userShoppingCartKey, $productKey) {  // Transaction implementation
+            $pipe->set($userShoppingCartKey, json_encode($shoppingCart));
+            $pipe->set($productKey, json_encode($product));
         });
 
 
